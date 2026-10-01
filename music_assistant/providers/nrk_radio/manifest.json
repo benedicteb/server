@@ -4,7 +4,7 @@
   "stage": "beta",
   "name": "NRK Radio",
   "description": "Listen to NRK, Norway's public service broadcaster — live national and district radio channels.",
-  "codeowners": ["@bebbott"],
+  "codeowners": ["@benedicteb"],
   "requirements": [],
   "multi_instance": false
 }
