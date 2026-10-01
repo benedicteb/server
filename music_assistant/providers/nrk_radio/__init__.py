@@ -137,6 +137,8 @@ class NRKRadioProvider(MusicProvider):
         if await self._get_channel(item_id) is None:
             raise MediaNotFoundError(f"Radio station {item_id} not found")
         manifest = await self._get_json(f"/playback/manifest/channel/{item_id}")
+        if not isinstance(manifest, dict):
+            raise ProviderUnavailableError("Unexpected NRK Radio playback manifest")
         if not (url := select_stream_url(manifest)):
             reason = non_playable_reason(manifest) or "no live stream available"
             raise MediaNotFoundError(f"Radio station {item_id} cannot be played: {reason}")
