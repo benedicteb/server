@@ -1791,7 +1791,7 @@
   "provider.nicovideo.manifest.description": "Support for niconico video(nicovideo) in Music Assistant",
   "provider.nicovideo.media.recommendations.nicovideo_following_activities.name": "New Tracks from Followed Users",
   "provider.nrk_radio.manifest.description": "Listen to NRK, Norway's public service broadcaster — live national and district radio channels.",
-  "provider.nrk_radio.media.folder.p1_district_channels.name": "P1 district channels",
+  "provider.nrk_radio.media.folder.p1_district_channels.name": "Distriktskanaler",
   "provider.nts.manifest.description": "Stream NTS Radio's live channels and Infinite Mixtapes — independent, eclectic radio broadcast from over 50 cities around the globe, live 24/7.",
   "provider.nts.media.folder.infinite_mixtapes.name": "Infinite Mixtapes",
   "provider.nts.media.folder.live_channels.name": "Live Channels",

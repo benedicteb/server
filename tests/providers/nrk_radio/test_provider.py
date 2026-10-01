@@ -47,6 +47,7 @@ async def test_browse_root_lists_national_channels_then_district_folder(
     folder = items[3]
     assert isinstance(folder, BrowseFolder)
     assert folder.path == f"{ROOT}district"
+    assert folder.name == "Distriktskanaler"
     assert folder.translation_key == "p1_district_channels"
 
 
