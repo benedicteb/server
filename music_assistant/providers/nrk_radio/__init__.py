@@ -208,7 +208,7 @@ class NRKRadioProvider(MusicProvider):
                 resp.raise_for_status()
                 return await resp.json()
         except (aiohttp.ClientError, TimeoutError, ValueError) as err:
-            raise ProviderUnavailableError("NRK Radio API unavailable") from err
+            raise ProviderUnavailableError(f"NRK Radio API unavailable: {path}") from err
 
     def _parse_radio(self, channel: dict[str, Any]) -> Radio:
         """Build a Radio for a channel entry."""
