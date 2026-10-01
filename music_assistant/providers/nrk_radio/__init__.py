@@ -48,7 +48,7 @@ CHANNEL_CACHE_EXPIRATION: Final = 3600 * 24
 DISTRICT_FOLDER_ID: Final = "district"
 METADATA_UPDATE_INTERVAL: Final = 30
 
-SUPPORTED_FEATURES = {
+SUPPORTED_FEATURES: Final = {
     ProviderFeature.BROWSE,
     ProviderFeature.SEARCH,
 }
