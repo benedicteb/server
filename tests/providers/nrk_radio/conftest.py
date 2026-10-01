@@ -3,6 +3,12 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from music_assistant.providers.nrk_radio import API_BASE, SUPPORTED_FEATURES, NRKRadioProvider
+from tests.common import use_real_create_task
 
 INSTANCE_ID = "nrk_radio--test123"
 DOMAIN = "nrk_radio"
@@ -94,3 +100,45 @@ def make_element(
         "programTitle": program,
         "relativeTimeType": relative,
     }
+
+
+@pytest.fixture
+def provider() -> NRKRadioProvider:
+    """Return an NRKRadioProvider with mocked dependencies and a cold cache."""
+    mass = AsyncMock()
+    mass.http_session = MagicMock()
+    # force a cache miss so the wrapped fetch always runs
+    mass.cache.get_with_freshness = AsyncMock(return_value=(None, False, False))
+    use_real_create_task(mass)
+    manifest = MagicMock()
+    manifest.domain = DOMAIN
+    config = MagicMock()
+    config.instance_id = INSTANCE_ID
+    config.get_value.return_value = "GLOBAL"
+    return NRKRadioProvider(mass, manifest, config, SUPPORTED_FEATURES)
+
+
+def mock_api(provider: NRKRadioProvider, routes: dict[str, Any]) -> MagicMock:
+    """
+    Make the provider's HTTP session answer from a table of API paths.
+
+    :param provider: Provider whose session is replaced.
+    :param routes: API path mapped to the JSON payload to return, or an exception to raise.
+    """
+
+    def _get(url: str, **_: Any) -> MagicMock:
+        result = routes[url.removeprefix(API_BASE)]
+        context = MagicMock()
+        if isinstance(result, Exception):
+            context.__aenter__ = AsyncMock(side_effect=result)
+        else:
+            response = MagicMock()
+            response.raise_for_status = MagicMock()
+            response.json = AsyncMock(return_value=result)
+            context.__aenter__ = AsyncMock(return_value=response)
+        context.__aexit__ = AsyncMock(return_value=False)
+        return context
+
+    get = MagicMock(side_effect=_get)
+    provider.mass.http_session.get = get  # type: ignore[method-assign]
+    return get

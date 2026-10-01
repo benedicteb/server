@@ -1,0 +1,12 @@
+{
+  "media": {
+    "folder": {
+      "p1_district_channels": {
+        "name": "P1 district channels"
+      }
+    }
+  },
+  "manifest": {
+    "description": "Listen to NRK, Norway's public service broadcaster — live national and district radio channels."
+  }
+}

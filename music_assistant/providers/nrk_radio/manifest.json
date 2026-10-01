@@ -1,0 +1,10 @@
+{
+  "type": "music",
+  "domain": "nrk_radio",
+  "stage": "beta",
+  "name": "NRK Radio",
+  "description": "Listen to NRK, Norway's public service broadcaster — live national and district radio channels.",
+  "codeowners": ["@bebbott"],
+  "requirements": [],
+  "multi_instance": false
+}
