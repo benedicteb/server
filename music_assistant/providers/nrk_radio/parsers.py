@@ -112,10 +112,15 @@ def parse_stream_metadata(elements: list[Any]) -> StreamMetadata | None:
     if element.get("type") == "Music":
         return StreamMetadata(
             title=str(title),
-            artist=element.get("description") or None,
-            image_url=element.get("imageUrl") or None,
+            artist=_text(element.get("description")),
+            image_url=_text(element.get("imageUrl")),
         )
-    return StreamMetadata(title=str(title), artist=element.get("programTitle") or None)
+    return StreamMetadata(title=str(title), artist=_text(element.get("programTitle")))
+
+
+def _text(value: Any) -> str | None:
+    """Return a non-empty string value as is, and None for anything else."""
+    return value if isinstance(value, str) and value else None
 
 
 def _playback(channel: dict[str, Any]) -> dict[str, Any]:
