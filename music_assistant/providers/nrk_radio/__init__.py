@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING, Any, Final
 
 import aiohttp
 from music_assistant_models.enums import ContentType, MediaType, ProviderFeature, StreamType
-from music_assistant_models.errors import MediaNotFoundError, ProviderUnavailableError
+from music_assistant_models.errors import (
+    MediaNotFoundError,
+    ProviderUnavailableError,
+    UnplayableMediaError,
+)
 from music_assistant_models.media_items import (
     AudioFormat,
     BrowseFolder,
@@ -141,7 +145,7 @@ class NRKRadioProvider(MusicProvider):
             raise ProviderUnavailableError("Unexpected NRK Radio playback manifest")
         if not (url := select_stream_url(manifest)):
             reason = non_playable_reason(manifest) or "no live stream available"
-            raise MediaNotFoundError(f"Radio station {item_id} cannot be played: {reason}")
+            raise UnplayableMediaError(f"Radio station {item_id} cannot be played: {reason}")
         # now-playing info is left to the update callback, which the queue invokes right
         # after playback starts, so a slow metadata feed can never hold up the audio
         return StreamDetails(

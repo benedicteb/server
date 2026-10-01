@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from music_assistant_models.enums import ContentType, MediaType, StreamType
-from music_assistant_models.errors import MediaNotFoundError
+from music_assistant_models.errors import UnplayableMediaError
 from music_assistant_models.media_items import BrowseFolder, Radio
 
 from music_assistant.providers.nrk_radio import METADATA_UPDATE_INTERVAL, NRKRadioProvider
@@ -73,7 +73,7 @@ async def test_stream_details(provider: NRKRadioProvider) -> None:
 async def test_stream_details_not_playable(provider: NRKRadioProvider) -> None:
     """A channel NRK reports as not playable fails with NRK's own message."""
     mock_api(provider, {"/radio/live": CHANNELS, MANIFEST_PATH: MANIFEST_NOT_PLAYABLE})
-    with pytest.raises(MediaNotFoundError, match="Ikke tilgjengelig utenfor Norge"):
+    with pytest.raises(UnplayableMediaError, match="Ikke tilgjengelig utenfor Norge"):
         await provider.get_stream_details("p1", MediaType.RADIO)
 
 
