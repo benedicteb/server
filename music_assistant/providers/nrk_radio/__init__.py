@@ -79,7 +79,7 @@ class NRKRadioProvider(MusicProvider):
 
         :param path: The browse path, with the district folder as its only sub-path.
         """
-        subpath = path.split("://", 1)[1] if "://" in path else ""
+        subpath = path.partition("://")[2]
         channels = await self._get_channels()
         if subpath == DISTRICT_FOLDER_ID:
             return [
