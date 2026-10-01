@@ -6,19 +6,27 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Final
 
 import aiohttp
-from music_assistant_models.enums import MediaType, ProviderFeature
+from music_assistant_models.enums import ContentType, MediaType, ProviderFeature, StreamType
 from music_assistant_models.errors import MediaNotFoundError, ProviderUnavailableError
 from music_assistant_models.media_items import (
+    AudioFormat,
     BrowseFolder,
     MediaItemType,
     Radio,
     SearchResults,
 )
+from music_assistant_models.streamdetails import StreamDetails
 
 from music_assistant.controllers.cache import use_cache
 from music_assistant.models.music_provider import MusicProvider
 
-from .parsers import is_district_channel, parse_radio
+from .parsers import (
+    is_district_channel,
+    non_playable_reason,
+    parse_radio,
+    parse_stream_metadata,
+    select_stream_url,
+)
 
 if TYPE_CHECKING:
     from music_assistant_models.config_entries import ConfigEntry, ProviderConfig
@@ -34,6 +42,7 @@ HTTP_TIMEOUT: Final = aiohttp.ClientTimeout(total=10)
 
 CHANNEL_CACHE_EXPIRATION: Final = 3600 * 24
 DISTRICT_FOLDER_ID: Final = "district"
+METADATA_UPDATE_INTERVAL: Final = 30
 
 SUPPORTED_FEATURES = {
     ProviderFeature.BROWSE,
@@ -118,6 +127,36 @@ class NRKRadioProvider(MusicProvider):
         ][:limit]
         return SearchResults(radio=radios)
 
+    async def get_stream_details(self, item_id: str, media_type: MediaType) -> StreamDetails:
+        """
+        Get stream details for a channel.
+
+        :param item_id: NRK channel id.
+        :param media_type: Media type of the item to stream.
+        """
+        if await self._get_channel(item_id) is None:
+            raise MediaNotFoundError(f"Radio station {item_id} not found")
+        manifest = await self._get_json(f"/playback/manifest/channel/{item_id}")
+        if not (url := select_stream_url(manifest)):
+            reason = non_playable_reason(manifest) or "no live stream available"
+            raise MediaNotFoundError(f"Radio station {item_id} cannot be played: {reason}")
+        details = StreamDetails(
+            provider=self.instance_id,
+            item_id=item_id,
+            media_type=media_type,
+            stream_type=StreamType.HLS,
+            path=url,
+            audio_format=AudioFormat(content_type=ContentType.AAC),
+            can_seek=False,
+            allow_seek=False,
+            stream_metadata_update_callback=self._update_stream_metadata,
+            stream_metadata_update_interval=METADATA_UPDATE_INTERVAL,
+        )
+        # set initial metadata so the listener sees what is on air right away
+        if (elements := await self._get_live_elements(item_id)) is not None:
+            details.stream_metadata = parse_stream_metadata(elements)
+        return details
+
     @use_cache(CHANNEL_CACHE_EXPIRATION)
     async def _get_channels(self) -> list[dict[str, Any]]:
         """Fetch the list of NRK's live radio channels."""
@@ -149,3 +188,28 @@ class NRKRadioProvider(MusicProvider):
     def _parse_radio(self, channel: dict[str, Any]) -> Radio:
         """Build a Radio for a channel entry."""
         return parse_radio(channel, self.instance_id, self.domain)
+
+    async def _update_stream_metadata(
+        self, stream_details: StreamDetails, elapsed_time: int
+    ) -> None:
+        """
+        Refresh the now-playing metadata of a playing channel.
+
+        :param stream_details: StreamDetails to update.
+        :param elapsed_time: Elapsed playback time in seconds (unused).
+        """
+        if (elements := await self._get_live_elements(stream_details.item_id)) is None:
+            return
+        stream_details.stream_metadata = parse_stream_metadata(elements)
+
+    async def _get_live_elements(self, channel_id: str) -> list[Any] | None:
+        """Fetch what is on air on a channel, or None if that could not be determined."""
+        try:
+            elements = await self._get_json(f"/channels/{channel_id}/liveelements")
+        except ProviderUnavailableError as err:
+            self.logger.debug("NRK now-playing fetch failed for %s: %s", channel_id, err)
+            return None
+        if not isinstance(elements, list):
+            self.logger.debug("Unexpected NRK now-playing payload for %s", channel_id)
+            return None
+        return elements

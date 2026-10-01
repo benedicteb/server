@@ -4,15 +4,30 @@ from __future__ import annotations
 
 import aiohttp
 import pytest
-from music_assistant_models.enums import MediaType
+from music_assistant_models.enums import ContentType, MediaType, StreamType
 from music_assistant_models.errors import MediaNotFoundError, ProviderUnavailableError
 from music_assistant_models.media_items import BrowseFolder, Radio
+from music_assistant_models.streamdetails import StreamDetails, StreamMetadata
 
-from music_assistant.providers.nrk_radio import NRKRadioProvider
+from music_assistant.providers.nrk_radio import METADATA_UPDATE_INTERVAL, NRKRadioProvider
 
-from .conftest import CHANNELS, INSTANCE_ID, mock_api
+from .conftest import (
+    CHANNELS,
+    INSTANCE_ID,
+    MANIFEST_NOT_PLAYABLE,
+    MANIFEST_PLAYABLE,
+    STREAM_URL,
+    make_element,
+    mock_api,
+)
 
 ROOT = f"{INSTANCE_ID}://"
+MANIFEST_PATH = "/playback/manifest/channel/p1"
+ELEMENTS_PATH = "/channels/p1/liveelements"
+NOW_PLAYING = [
+    make_element("Old song", artist="Someone", relative="Past", start_ms=1000),
+    make_element("Memoarer", artist="Undergrunn", relative="Present", start_ms=2000),
+]
 
 
 async def test_browse_root_lists_national_channels_then_district_folder(
@@ -121,3 +136,135 @@ async def test_search_for_other_media_types_skips_the_api(provider: NRKRadioProv
     results = await provider.search("p3", [MediaType.TRACK], limit=5)
     assert not results.radio
     get.assert_not_called()
+
+
+async def test_stream_details(provider: NRKRadioProvider) -> None:
+    """A playable channel yields HLS stream details with the first now-playing info."""
+    mock_api(
+        provider,
+        {"/radio/live": CHANNELS, MANIFEST_PATH: MANIFEST_PLAYABLE, ELEMENTS_PATH: NOW_PLAYING},
+    )
+
+    details = await provider.get_stream_details("p1", MediaType.RADIO)
+
+    assert details.path == STREAM_URL
+    assert details.provider == INSTANCE_ID
+    assert details.item_id == "p1"
+    assert details.media_type == MediaType.RADIO
+    assert details.stream_type == StreamType.HLS
+    assert details.audio_format.content_type == ContentType.AAC
+    assert details.can_seek is False
+    assert details.allow_seek is False
+    assert details.stream_metadata_update_interval == METADATA_UPDATE_INTERVAL
+    assert details.stream_metadata_update_callback is not None
+    assert details.stream_metadata is not None
+    assert details.stream_metadata.title == "Memoarer"
+    assert details.stream_metadata.artist == "Undergrunn"
+
+
+async def test_stream_details_survive_now_playing_failure(provider: NRKRadioProvider) -> None:
+    """Playback still starts when the now-playing feed is down."""
+    mock_api(
+        provider,
+        {
+            "/radio/live": CHANNELS,
+            MANIFEST_PATH: MANIFEST_PLAYABLE,
+            ELEMENTS_PATH: aiohttp.ClientError("down"),
+        },
+    )
+    details = await provider.get_stream_details("p1", MediaType.RADIO)
+    assert details.path == STREAM_URL
+    assert details.stream_metadata is None
+
+
+async def test_stream_details_unknown_channel(provider: NRKRadioProvider) -> None:
+    """An unknown channel id is not found, without asking for a manifest."""
+    get = mock_api(provider, {"/radio/live": CHANNELS})
+    with pytest.raises(MediaNotFoundError):
+        await provider.get_stream_details("nope", MediaType.RADIO)
+    assert get.call_count == 1
+
+
+async def test_stream_details_not_playable(provider: NRKRadioProvider) -> None:
+    """A channel NRK reports as not playable fails with NRK's own message."""
+    mock_api(provider, {"/radio/live": CHANNELS, MANIFEST_PATH: MANIFEST_NOT_PLAYABLE})
+    with pytest.raises(MediaNotFoundError, match="Ikke tilgjengelig utenfor Norge"):
+        await provider.get_stream_details("p1", MediaType.RADIO)
+
+
+async def test_stream_details_without_hls_asset(provider: NRKRadioProvider) -> None:
+    """A playable manifest without an HLS asset is reported as not found."""
+    manifest = {"playability": "playable", "playable": {"assets": []}}
+    mock_api(provider, {"/radio/live": CHANNELS, MANIFEST_PATH: manifest})
+    with pytest.raises(MediaNotFoundError):
+        await provider.get_stream_details("p1", MediaType.RADIO)
+
+
+async def test_stream_details_manifest_request_fails(provider: NRKRadioProvider) -> None:
+    """A failed manifest request surfaces as provider unavailable."""
+    mock_api(provider, {"/radio/live": CHANNELS, MANIFEST_PATH: aiohttp.ClientError("down")})
+    with pytest.raises(ProviderUnavailableError):
+        await provider.get_stream_details("p1", MediaType.RADIO)
+
+
+async def _playing(provider: NRKRadioProvider) -> StreamDetails:
+    """Return stream details for P1 as they are while it plays."""
+    mock_api(
+        provider,
+        {"/radio/live": CHANNELS, MANIFEST_PATH: MANIFEST_PLAYABLE, ELEMENTS_PATH: NOW_PLAYING},
+    )
+    return await provider.get_stream_details("p1", MediaType.RADIO)
+
+
+async def test_metadata_update_picks_up_new_song(provider: NRKRadioProvider) -> None:
+    """The callback replaces the metadata with the entry now on air."""
+    details = await _playing(provider)
+    newer = [
+        *NOW_PLAYING,
+        make_element("Åpen prat", kind="News", relative="Present", start_ms=3000),
+    ]
+    mock_api(provider, {ELEMENTS_PATH: newer})
+
+    assert details.stream_metadata_update_callback is not None
+    await details.stream_metadata_update_callback(details, 30)
+
+    assert details.stream_metadata == StreamMetadata(title="Åpen prat", artist="Siesta")
+
+
+async def test_metadata_update_clears_when_nothing_is_current(provider: NRKRadioProvider) -> None:
+    """With no current entry the metadata is cleared so the station name shows."""
+    details = await _playing(provider)
+    mock_api(provider, {ELEMENTS_PATH: [make_element("Past song")]})
+
+    assert details.stream_metadata_update_callback is not None
+    await details.stream_metadata_update_callback(details, 30)
+
+    assert details.stream_metadata is None
+
+
+async def test_metadata_update_keeps_display_when_request_fails(
+    provider: NRKRadioProvider,
+) -> None:
+    """A failed fetch leaves the current display untouched."""
+    details = await _playing(provider)
+    mock_api(provider, {ELEMENTS_PATH: TimeoutError()})
+
+    assert details.stream_metadata_update_callback is not None
+    await details.stream_metadata_update_callback(details, 30)
+
+    assert details.stream_metadata is not None
+    assert details.stream_metadata.title == "Memoarer"
+
+
+async def test_metadata_update_keeps_display_on_malformed_payload(
+    provider: NRKRadioProvider,
+) -> None:
+    """A payload that is not a list counts as a failed fetch."""
+    details = await _playing(provider)
+    mock_api(provider, {ELEMENTS_PATH: {"message": "error", "statusCode": 500}})
+
+    assert details.stream_metadata_update_callback is not None
+    await details.stream_metadata_update_callback(details, 30)
+
+    assert details.stream_metadata is not None
+    assert details.stream_metadata.title == "Memoarer"
