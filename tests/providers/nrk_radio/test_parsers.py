@@ -181,3 +181,14 @@ def test_parse_stream_metadata_nothing_current() -> None:
     """No Present entry, or one without a title, yields no metadata."""
     assert parse_stream_metadata([make_element("Past song")]) is None
     assert parse_stream_metadata([make_element("", relative="Present")]) is None
+
+
+def test_parse_radio_with_null_embedded_data() -> None:
+    """A channel whose embedded playback data is null still yields a Radio."""
+    for channel in (
+        {"id": "p1", "type": "regionalChannel", "_embedded": None},
+        {"id": "p1", "type": "regionalChannel", "_embedded": {"playback": None}},
+    ):
+        radio = parse_radio(channel, INSTANCE_ID, DOMAIN)
+        assert radio.name == "NRK p1"
+        assert not radio.metadata.images

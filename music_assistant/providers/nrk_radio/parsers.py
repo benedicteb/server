@@ -23,7 +23,7 @@ def is_district_channel(channel: dict[str, Any]) -> bool:
 
 def select_image_url(channel: dict[str, Any]) -> str | None:
     """Return the square poster closest to the preferred width, or None if there is none."""
-    posters = channel.get("_embedded", {}).get("playback", {}).get("squarePosters") or []
+    posters = _playback(channel).get("squarePosters") or []
     items = [item for item in (posters[0].get("items") or []) if item.get("url")] if posters else []
     if not items:
         return None
@@ -42,7 +42,7 @@ def parse_radio(channel: dict[str, Any], instance_id: str, domain: str) -> Radio
     :param domain: Domain of the provider the radio belongs to.
     """
     channel_id = str(channel["id"])
-    title = channel.get("_embedded", {}).get("playback", {}).get("title")
+    title = _playback(channel).get("title")
     radio = Radio(
         item_id=channel_id,
         provider=instance_id,
@@ -116,3 +116,9 @@ def parse_stream_metadata(elements: list[Any]) -> StreamMetadata | None:
             image_url=element.get("imageUrl") or None,
         )
     return StreamMetadata(title=str(title), artist=element.get("programTitle") or None)
+
+
+def _playback(channel: dict[str, Any]) -> dict[str, Any]:
+    """Return the embedded playback data of a channel entry, or an empty dict if it has none."""
+    playback = (channel.get("_embedded") or {}).get("playback")
+    return playback if isinstance(playback, dict) else {}

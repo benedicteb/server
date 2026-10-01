@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any, cast
+from unittest.mock import AsyncMock
+
 import aiohttp
 import pytest
 from music_assistant_models.enums import ContentType, MediaType, StreamType
@@ -268,3 +272,53 @@ async def test_metadata_update_keeps_display_on_malformed_payload(
 
     assert details.stream_metadata is not None
     assert details.stream_metadata.title == "Memoarer"
+
+
+@pytest.mark.parametrize("payload", [{"message": "error", "statusCode": 500}, [], None, "oops"])
+async def test_malformed_channel_list_is_unavailable_and_not_cached(
+    provider: NRKRadioProvider, payload: Any
+) -> None:
+    """A channel list of the wrong shape is an outage, and must not stick in the cache."""
+    mock_api(provider, {"/radio/live": payload})
+
+    with pytest.raises(ProviderUnavailableError):
+        await provider.browse(ROOT)
+
+    await asyncio.sleep(0)
+    cast("AsyncMock", provider.mass.cache.set).assert_not_called()
+
+
+async def test_unusable_channel_entries_are_dropped(provider: NRKRadioProvider) -> None:
+    """Entries without a usable id are skipped instead of breaking every listing."""
+    payload = [*CHANNELS, None, "x", {"type": "regionalChannel"}, {"id": 7}, {"id": ""}]
+    mock_api(provider, {"/radio/live": payload})
+
+    items = await provider.browse(ROOT)
+
+    assert [item.item_id for item in items] == ["p1", "p3", "sapmi", "district"]
+
+
+async def test_channel_list_is_served_from_cache(provider: NRKRadioProvider) -> None:
+    """A cached channel list is used without asking NRK again."""
+    get = mock_api(provider, {"/radio/live": CHANNELS})
+    provider.mass.cache.get_with_freshness = AsyncMock(  # type: ignore[method-assign]
+        return_value=(CHANNELS, True, True)
+    )
+
+    items = await provider.browse(ROOT)
+
+    assert [item.item_id for item in items] == ["p1", "p3", "sapmi", "district"]
+    get.assert_not_called()
+
+
+async def test_channel_list_is_cached_for_a_day(provider: NRKRadioProvider) -> None:
+    """The fetched channel list is stored with a 24-hour expiry."""
+    mock_api(provider, {"/radio/live": CHANNELS})
+
+    await provider.browse(ROOT)
+    await asyncio.sleep(0)
+
+    cache_set = cast("AsyncMock", provider.mass.cache.set)
+    cache_set.assert_called_once()
+    assert cache_set.call_args.kwargs["expiration"] == 86400
+    assert cache_set.call_args.kwargs["data"] == CHANNELS

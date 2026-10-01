@@ -160,7 +160,15 @@ class NRKRadioProvider(MusicProvider):
     @use_cache(CHANNEL_CACHE_EXPIRATION)
     async def _get_channels(self) -> list[dict[str, Any]]:
         """Fetch the list of NRK's live radio channels."""
-        channels: list[dict[str, Any]] = await self._get_json("/radio/live")
+        data = await self._get_json("/radio/live")
+        channels: list[dict[str, Any]] = [
+            channel
+            for channel in (data if isinstance(data, list) else [])
+            if isinstance(channel, dict) and isinstance(channel.get("id"), str) and channel["id"]
+        ]
+        if not channels:
+            # raise rather than return, so an unusable answer is not cached for a day
+            raise ProviderUnavailableError("NRK Radio API returned no channels")
         return channels
 
     async def _get_channel(self, channel_id: str) -> dict[str, Any] | None:
