@@ -123,7 +123,8 @@ class NRKRadioProvider(MusicProvider):
         """
         if media_types and MediaType.RADIO not in media_types:
             return SearchResults()
-        query = search_query.strip().casefold()
+        if not (query := search_query.strip().casefold()):
+            return SearchResults()
         radios = [
             radio
             for channel in await self._get_channels()

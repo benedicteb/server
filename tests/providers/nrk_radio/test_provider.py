@@ -55,6 +55,9 @@ async def test_search(provider: NRKRadioProvider) -> None:
     results = await provider.search("nrk", [MediaType.TRACK], limit=10)
     assert not results.radio
 
+    results = await provider.search("  ", [MediaType.RADIO], limit=10)
+    assert not results.radio
+
 
 async def test_stream_details(provider: NRKRadioProvider) -> None:
     """A playable channel yields HLS stream details without waiting for now-playing info."""
