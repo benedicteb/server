@@ -1,8 +1,8 @@
 {
   "media": {
     "folder": {
-      "p1_district_channels": {
-        "name": "Distriktskanaler"
+      "local_channels": {
+        "name": "Local channels"
       }
     }
   },

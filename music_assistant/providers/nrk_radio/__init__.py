@@ -96,8 +96,8 @@ class NRKRadioProvider(MusicProvider):
                 item_id=DISTRICT_FOLDER_ID,
                 provider=self.instance_id,
                 path=f"{path}{DISTRICT_FOLDER_ID}",
-                name="Distriktskanaler",
-                translation_key="p1_district_channels",
+                name="Local channels",
+                translation_key="local_channels",
             )
         )
         return items

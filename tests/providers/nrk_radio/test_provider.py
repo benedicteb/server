@@ -39,7 +39,8 @@ async def test_browse(provider: NRKRadioProvider) -> None:
     assert all(isinstance(item, Radio) for item in items[:3])
     folder = items[3]
     assert isinstance(folder, BrowseFolder)
-    assert folder.name == "Distriktskanaler"
+    assert folder.name == "Local channels"
+    assert folder.translation_key == "local_channels"
 
     district = await provider.browse(folder.path)
     assert [item.item_id for item in district] == ["p1_troms", "p1_more_romsdal"]
