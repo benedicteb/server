@@ -161,7 +161,8 @@ class NRKRadioProvider(MusicProvider):
             stream_metadata_update_interval=METADATA_UPDATE_INTERVAL,
         )
 
-    @use_cache(CHANNEL_CACHE_EXPIRATION)
+    # serve the expired list while refreshing, so playback survives an outage of the list
+    @use_cache(CHANNEL_CACHE_EXPIRATION, allow_expired_cache=True)
     async def _get_channels(self) -> list[dict[str, Any]]:
         """Fetch the list of NRK's live radio channels."""
         data = await self._get_json("/radio/live")
