@@ -140,7 +140,9 @@ class NRKRadioProvider(MusicProvider):
         if not (url := select_stream_url(manifest)):
             reason = non_playable_reason(manifest) or "no live stream available"
             raise MediaNotFoundError(f"Radio station {item_id} cannot be played: {reason}")
-        details = StreamDetails(
+        # now-playing info is left to the update callback, which the queue invokes right
+        # after playback starts, so a slow metadata feed can never hold up the audio
+        return StreamDetails(
             provider=self.instance_id,
             item_id=item_id,
             media_type=media_type,
@@ -152,10 +154,6 @@ class NRKRadioProvider(MusicProvider):
             stream_metadata_update_callback=self._update_stream_metadata,
             stream_metadata_update_interval=METADATA_UPDATE_INTERVAL,
         )
-        # set initial metadata so the listener sees what is on air right away
-        if (elements := await self._get_live_elements(item_id)) is not None:
-            details.stream_metadata = parse_stream_metadata(elements)
-        return details
 
     @use_cache(CHANNEL_CACHE_EXPIRATION)
     async def _get_channels(self) -> list[dict[str, Any]]:

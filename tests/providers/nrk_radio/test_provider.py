@@ -57,11 +57,8 @@ async def test_search(provider: NRKRadioProvider) -> None:
 
 
 async def test_stream_details(provider: NRKRadioProvider) -> None:
-    """A playable channel yields HLS stream details with the first now-playing info."""
-    mock_api(
-        provider,
-        {"/radio/live": CHANNELS, MANIFEST_PATH: MANIFEST_PLAYABLE, ELEMENTS_PATH: NOW_PLAYING},
-    )
+    """A playable channel yields HLS stream details without waiting for now-playing info."""
+    get = mock_api(provider, {"/radio/live": CHANNELS, MANIFEST_PATH: MANIFEST_PLAYABLE})
 
     details = await provider.get_stream_details("p1", MediaType.RADIO)
 
@@ -69,8 +66,8 @@ async def test_stream_details(provider: NRKRadioProvider) -> None:
     assert details.stream_type == StreamType.HLS
     assert details.audio_format.content_type == ContentType.AAC
     assert details.stream_metadata_update_interval == METADATA_UPDATE_INTERVAL
-    assert details.stream_metadata is not None
-    assert details.stream_metadata.title == "Memoarer"
+    assert details.stream_metadata is None
+    assert get.call_count == 2
 
 
 async def test_stream_details_not_playable(provider: NRKRadioProvider) -> None:
@@ -80,20 +77,21 @@ async def test_stream_details_not_playable(provider: NRKRadioProvider) -> None:
         await provider.get_stream_details("p1", MediaType.RADIO)
 
 
-async def test_metadata_update_keeps_display_when_request_fails(
-    provider: NRKRadioProvider,
-) -> None:
-    """A failed now-playing fetch leaves the current display untouched."""
+async def test_metadata_update(provider: NRKRadioProvider) -> None:
+    """The callback shows what is on air, and a failed fetch leaves the display untouched."""
     mock_api(
         provider,
         {"/radio/live": CHANNELS, MANIFEST_PATH: MANIFEST_PLAYABLE, ELEMENTS_PATH: NOW_PLAYING},
     )
     details = await provider.get_stream_details("p1", MediaType.RADIO)
-    mock_api(provider, {ELEMENTS_PATH: TimeoutError()})
-
     assert details.stream_metadata_update_callback is not None
-    await details.stream_metadata_update_callback(details, 30)
 
+    await details.stream_metadata_update_callback(details, 0)
+    assert details.stream_metadata is not None
+    assert details.stream_metadata.title == "Memoarer"
+
+    mock_api(provider, {ELEMENTS_PATH: TimeoutError()})
+    await details.stream_metadata_update_callback(details, 30)
     assert details.stream_metadata is not None
     assert details.stream_metadata.title == "Memoarer"
 
