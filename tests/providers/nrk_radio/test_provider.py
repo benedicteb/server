@@ -15,6 +15,7 @@ from .conftest import (
     MANIFEST_NOT_PLAYABLE,
     MANIFEST_PLAYABLE,
     STREAM_URL,
+    make_channel,
     make_element,
     mock_api,
 )
@@ -98,8 +99,10 @@ async def test_metadata_update_keeps_display_when_request_fails(
 
 
 async def test_unusable_channel_entries_are_dropped(provider: NRKRadioProvider) -> None:
-    """Entries without a usable id are skipped instead of breaking every listing."""
-    payload = [*CHANNELS, None, {"type": "regionalChannel"}, {"id": 7}]
+    """Entries that cannot be turned into a radio are skipped instead of breaking every listing."""
+    bad_posters = make_channel("bad_posters", "Bad posters")
+    bad_posters["_embedded"]["playback"]["squarePosters"] = [None]
+    payload = [*CHANNELS, None, {"type": "regionalChannel"}, {"id": 7}, bad_posters]
     mock_api(provider, {"/radio/live": payload})
 
     items = await provider.browse(ROOT)

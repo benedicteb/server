@@ -164,12 +164,23 @@ class NRKRadioProvider(MusicProvider):
         channels: list[dict[str, Any]] = [
             channel
             for channel in (data if isinstance(data, list) else [])
-            if isinstance(channel, dict) and isinstance(channel.get("id"), str) and channel["id"]
+            if self._is_usable_channel(channel)
         ]
         if not channels:
             # raise rather than return, so an unusable answer is not cached for a day
             raise ProviderUnavailableError("NRK Radio API returned no channels")
         return channels
+
+    def _is_usable_channel(self, channel: Any) -> bool:
+        """Return True if a channel entry can be turned into a Radio."""
+        if not isinstance(channel, dict) or not isinstance(channel.get("id"), str):
+            return False
+        try:
+            self._parse_radio(channel)
+        except (AttributeError, KeyError, TypeError, ValueError) as err:
+            self.logger.debug("Skipping unusable NRK channel %s: %r", channel["id"], err)
+            return False
+        return bool(channel["id"])
 
     async def _get_channel(self, channel_id: str) -> dict[str, Any] | None:
         """Return the channel entry for an id, or None if unknown."""
