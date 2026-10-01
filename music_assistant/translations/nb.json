@@ -101,6 +101,7 @@
   "provider.lastfm_scrobble.config_entries._provider.label": "Leverandør",
   "provider.local_audio.config_entries.volume_control.options.disabled": "Avslått",
   "provider.musicme.config_entries.password.label": "Passord",
+  "provider.nrk_radio.media.folder.local_channels.name": "Distriktskanaler",
   "provider.opensubsonic.config_entries.password.label": "Passord",
   "provider.opensubsonic.config_entries.username.label": "Brukernavn",
   "provider.pandora.config_entries.password.label": "Passord",
